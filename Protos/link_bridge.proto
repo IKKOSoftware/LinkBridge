@@ -1,0 +1,64 @@
+// link_bridge.proto
+//
+// The protocol LinkBridge speaks: Ableton Link's shared timeline, served to an app over gRPC on a local socket.
+//
+// This file (and only this file) is MIT licensed, so apps can generate their client from it under any licence:
+//
+//   Copyright (c) 2026 IKKO. Permission is hereby granted, free of charge, to any person obtaining a copy of this
+//   file, to deal in it without restriction, including without limitation the rights to use, copy, modify, merge,
+//   publish, distribute, sublicense, and/or sell copies of it. It is provided "as is", without warranty of any kind.
+//
+// Times are uptime nanoseconds (DispatchTime.uptimeNanoseconds on Apple platforms: mach_absolute_time, the same clock
+// in every process on the machine), so a client can work out the beat at any moment from the last Timeline it has:
+//
+//   beat(now) = timeline.beat + (now - timeline.uptime_nanos) / 60e9 * timeline.tempo
+
+syntax = "proto3";
+
+package linkbridge;
+
+service LinkBridge {
+  // Joining or leaving the session, sharing start and stop, and the bar length (quantum) beats are given in phase with.
+  rpc Configure(Settings) returns (Timeline);
+  rpc SetTempo(SetTempoRequest) returns (Timeline);
+  // Shares starting or stopping with the session (when start/stop sync is on).
+  rpc SetPlaying(SetPlayingRequest) returns (Timeline);
+  // The timeline every `interval_ms`, for as long as the call is open.
+  rpc Watch(WatchRequest) returns (stream Timeline);
+}
+
+message Settings {
+  bool enabled = 1;
+  bool start_stop_sync = 2;
+  double quantum = 3;
+  // Increasing with every request a client makes; Timelines echo the last one applied as `applied`.
+  uint64 sequence = 4;
+}
+
+message SetTempoRequest {
+  double bpm = 1;
+  uint64 sequence = 2;
+}
+
+message SetPlayingRequest {
+  bool playing = 1;
+  uint64 sequence = 2;
+}
+
+message WatchRequest {
+  uint32 interval_ms = 1;
+}
+
+message Timeline {
+  bool enabled = 1;
+  bool start_stop_sync = 2;
+  double quantum = 3;
+  double tempo = 4;
+  // The beat on the shared timeline at `uptime_nanos`.
+  double beat = 5;
+  uint64 uptime_nanos = 6;
+  bool is_playing = 7;
+  uint32 peers = 8;
+  // The `sequence` of the last request applied, so a client can ignore a Timeline from before its latest change.
+  uint64 applied = 9;
+}
